@@ -1,4 +1,5 @@
 using System;
+using System.Collections.Generic;
 using System.ComponentModel.DataAnnotations;
 using System.Linq;
 using Jellyfin.Api.Extensions;
@@ -101,9 +102,10 @@ public class PersonsController : BaseJellyfinApiController
         });
 
         return new QueryResult<BaseItemDto>(
-            peopleItems
-            .Select(person => _dtoService.GetItemByNameDto(person, dtoOptions, null, user))
-            .ToArray());
+                peopleItems
+                .Where(person => person.IsVisible(user))
+                .Select(person => _dtoService.GetItemByNameDto(person, dtoOptions, null, user))
+                .ToArray());
     }
 
     /// <summary>
