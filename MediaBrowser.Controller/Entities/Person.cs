@@ -5,6 +5,7 @@
 using System;
 using System.Collections.Generic;
 using System.Text.Json.Serialization;
+using Jellyfin.Data.Entities;
 using Jellyfin.Extensions;
 using MediaBrowser.Controller.Providers;
 using Microsoft.Extensions.Logging;
@@ -60,6 +61,19 @@ namespace MediaBrowser.Controller.Entities
             value /= 3;
 
             return value;
+        }
+
+        public bool IsVisible(User user)
+        {
+            var query = new InternalItemsQuery
+            {
+                User = user,
+                PersonIds = new[] { Id },
+                Limit = 1,
+            };
+
+            var items = LibraryManager.GetItemList(query);
+            return items.Count > 0;
         }
 
         public IList<BaseItem> GetTaggedItems(InternalItemsQuery query)
