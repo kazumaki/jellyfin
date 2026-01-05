@@ -77,7 +77,6 @@ namespace MediaBrowser.Controller.Entities
             return items.Count > 0;
         }
 
-        public IList<BaseItem> GetTaggedItems(InternalItemsQuery query)
         public IReadOnlyList<BaseItem> GetTaggedItems(InternalItemsQuery query)
         {
             query.PersonIds = new[] { Id };
