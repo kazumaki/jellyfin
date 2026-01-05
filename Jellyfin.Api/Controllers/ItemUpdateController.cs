@@ -158,7 +158,10 @@ public class ItemUpdateController : BaseJellyfinApiController
             ParentalRatingOptions = _localizationManager.GetParentalRatings().ToList(),
             ExternalIdInfos = _providerManager.GetExternalIdInfos(item).ToArray(),
             Countries = _localizationManager.GetCountries().ToArray(),
-            Cultures = _localizationManager.GetCultures().ToArray()
+            Cultures = _localizationManager.GetCultures()
+                .DistinctBy(c => c.DisplayName, StringComparer.OrdinalIgnoreCase)
+                .OrderBy(c => c.DisplayName)
+                .ToArray()
         };
 
         if (!item.IsVirtualItem
@@ -299,7 +302,7 @@ public class ItemUpdateController : BaseJellyfinApiController
 
                 if (!season.LockedFields.Contains(MetadataField.Tags))
                 {
-                    season.Tags = season.Tags.Concat(addedTags).Except(removedTags).Distinct().ToArray();
+                    season.Tags = season.Tags.Concat(addedTags).Except(removedTags).Distinct(StringComparer.OrdinalIgnoreCase).ToArray();
                 }
 
                 season.OnMetadataChanged();
@@ -316,7 +319,7 @@ public class ItemUpdateController : BaseJellyfinApiController
 
                     if (!ep.LockedFields.Contains(MetadataField.Tags))
                     {
-                        ep.Tags = ep.Tags.Concat(addedTags).Except(removedTags).Distinct().ToArray();
+                        ep.Tags = ep.Tags.Concat(addedTags).Except(removedTags).Distinct(StringComparer.OrdinalIgnoreCase).ToArray();
                     }
 
                     ep.OnMetadataChanged();
@@ -337,7 +340,7 @@ public class ItemUpdateController : BaseJellyfinApiController
 
                 if (!ep.LockedFields.Contains(MetadataField.Tags))
                 {
-                    ep.Tags = ep.Tags.Concat(addedTags).Except(removedTags).Distinct().ToArray();
+                    ep.Tags = ep.Tags.Concat(addedTags).Except(removedTags).Distinct(StringComparer.OrdinalIgnoreCase).ToArray();
                 }
 
                 ep.OnMetadataChanged();
@@ -357,7 +360,7 @@ public class ItemUpdateController : BaseJellyfinApiController
 
                 if (!track.LockedFields.Contains(MetadataField.Tags))
                 {
-                    track.Tags = track.Tags.Concat(addedTags).Except(removedTags).Distinct().ToArray();
+                    track.Tags = track.Tags.Concat(addedTags).Except(removedTags).Distinct(StringComparer.OrdinalIgnoreCase).ToArray();
                 }
 
                 track.OnMetadataChanged();
@@ -457,7 +460,7 @@ public class ItemUpdateController : BaseJellyfinApiController
             return null;
         }
 
-        return (SeriesStatus)Enum.Parse(typeof(SeriesStatus), item.Status, true);
+        return Enum.Parse<SeriesStatus>(item.Status, true);
     }
 
     private DateTime NormalizeDateTime(DateTime val)

@@ -22,7 +22,7 @@ namespace Jellyfin.Providers.Tests.Manager
         {
             var newLocked = new[] { MetadataField.Genres, MetadataField.Cast };
             var newString = "new";
-            var newDate = DateTime.Now;
+            var newDate = DateTime.UtcNow;
 
             var oldLocked = new[] { MetadataField.Genres };
             var oldString = "old";
@@ -39,6 +39,7 @@ namespace Jellyfin.Providers.Tests.Manager
                     DateCreated = newDate
                 }
             };
+
             if (defaultDate)
             {
                 source.Item.DateCreated = default;
@@ -143,8 +144,6 @@ namespace Jellyfin.Providers.Tests.Manager
                 { "CriticRating", 1.0f, 2.0f },
                 { "EndDate", DateTime.UnixEpoch, DateTime.UtcNow },
                 { "PremiereDate", DateTime.UnixEpoch, DateTime.UtcNow },
-                { "PremiereDate", new DateTime(1999, 1, 1, 0, 0, 0, DateTimeKind.Utc), DateTime.UtcNow },
-                { "PremiereDate", new DateTime(2025, 2, 21, 0, 0, 0, DateTimeKind.Utc), DateTime.UtcNow },
                 { "Video3DFormat", Video3DFormat.HalfSideBySide, Video3DFormat.FullSideBySide }
             };
 
@@ -166,7 +165,17 @@ namespace Jellyfin.Providers.Tests.Manager
             Assert.True(TestMergeBaseItemData<Movie, MovieInfo>(propName, oldValue, newValue, null, true, out _));
             Assert.True(TestMergeBaseItemData<Movie, MovieInfo>(propName, null, newValue, null, false, out _));
 
-            Assert.True(TestMergeBaseItemData<Movie, MovieInfo>(propName, oldValue, null, null, true, out _));
+            // Video3DFormat - null values do NOT replace existing data
+            if (string.Equals(propName, "Video3DFormat", StringComparison.Ordinal))
+            {
+                Assert.False(
+                    TestMergeBaseItemData<Movie, MovieInfo>(propName, oldValue, null, null, true, out _));
+            }
+            else
+            {
+                Assert.True(
+                    TestMergeBaseItemData<Movie, MovieInfo>(propName, oldValue, null, null, true, out _));
+            }
         }
 
         [Fact]
@@ -340,7 +349,7 @@ namespace Jellyfin.Providers.Tests.Manager
             MetadataService<Movie, MovieInfo>.MergeBaseItemData(source, target, lockedFields, replaceData, false);
 
             actualValue = target.People;
-            return newValue?.Equals(actualValue) ?? actualValue is null;
+            return newValue?.SequenceEqual((IEnumerable<PersonInfo>)actualValue!) ?? actualValue is null;
         }
 
         /// <summary>

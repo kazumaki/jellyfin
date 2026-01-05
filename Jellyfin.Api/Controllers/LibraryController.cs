@@ -11,8 +11,9 @@ using Jellyfin.Api.Extensions;
 using Jellyfin.Api.Helpers;
 using Jellyfin.Api.ModelBinders;
 using Jellyfin.Api.Models.LibraryDtos;
-using Jellyfin.Data.Entities;
 using Jellyfin.Data.Enums;
+using Jellyfin.Database.Implementations.Entities;
+using Jellyfin.Database.Implementations.Enums;
 using Jellyfin.Extensions;
 using MediaBrowser.Common.Api;
 using MediaBrowser.Common.Extensions;
@@ -22,6 +23,7 @@ using MediaBrowser.Controller.Entities;
 using MediaBrowser.Controller.Entities.Audio;
 using MediaBrowser.Controller.Entities.Movies;
 using MediaBrowser.Controller.Entities.TV;
+using MediaBrowser.Controller.IO;
 using MediaBrowser.Controller.Library;
 using MediaBrowser.Controller.Providers;
 using MediaBrowser.Model.Activity;
@@ -144,8 +146,8 @@ public class LibraryController : BaseJellyfinApiController
         [FromRoute, Required] Guid itemId,
         [FromQuery] Guid? userId,
         [FromQuery] bool inheritFromParent = false,
-        [FromQuery, ModelBinder(typeof(CommaDelimitedArrayModelBinder))] ItemSortBy[]? sortBy = null,
-        [FromQuery, ModelBinder(typeof(CommaDelimitedArrayModelBinder))] SortOrder[]? sortOrder = null)
+        [FromQuery, ModelBinder(typeof(CommaDelimitedCollectionModelBinder))] ItemSortBy[]? sortBy = null,
+        [FromQuery, ModelBinder(typeof(CommaDelimitedCollectionModelBinder))] SortOrder[]? sortOrder = null)
     {
         userId = RequestHelpers.GetUserId(User, userId);
         var user = userId.IsNullOrEmpty()
@@ -218,8 +220,8 @@ public class LibraryController : BaseJellyfinApiController
         [FromRoute, Required] Guid itemId,
         [FromQuery] Guid? userId,
         [FromQuery] bool inheritFromParent = false,
-        [FromQuery, ModelBinder(typeof(CommaDelimitedArrayModelBinder))] ItemSortBy[]? sortBy = null,
-        [FromQuery, ModelBinder(typeof(CommaDelimitedArrayModelBinder))] SortOrder[]? sortOrder = null)
+        [FromQuery, ModelBinder(typeof(CommaDelimitedCollectionModelBinder))] ItemSortBy[]? sortBy = null,
+        [FromQuery, ModelBinder(typeof(CommaDelimitedCollectionModelBinder))] SortOrder[]? sortOrder = null)
     {
         userId = RequestHelpers.GetUserId(User, userId);
         var user = userId.IsNullOrEmpty()
@@ -290,8 +292,8 @@ public class LibraryController : BaseJellyfinApiController
         [FromRoute, Required] Guid itemId,
         [FromQuery] Guid? userId,
         [FromQuery] bool inheritFromParent = false,
-        [FromQuery, ModelBinder(typeof(CommaDelimitedArrayModelBinder))] ItemSortBy[]? sortBy = null,
-        [FromQuery, ModelBinder(typeof(CommaDelimitedArrayModelBinder))] SortOrder[]? sortOrder = null)
+        [FromQuery, ModelBinder(typeof(CommaDelimitedCollectionModelBinder))] ItemSortBy[]? sortBy = null,
+        [FromQuery, ModelBinder(typeof(CommaDelimitedCollectionModelBinder))] SortOrder[]? sortOrder = null)
     {
         var themeSongs = GetThemeSongs(
             itemId,
@@ -400,7 +402,7 @@ public class LibraryController : BaseJellyfinApiController
     [ProducesResponseType(StatusCodes.Status204NoContent)]
     [ProducesResponseType(StatusCodes.Status401Unauthorized)]
     [ProducesResponseType(StatusCodes.Status404NotFound)]
-    public ActionResult DeleteItems([FromQuery, ModelBinder(typeof(CommaDelimitedArrayModelBinder))] Guid[] ids)
+    public ActionResult DeleteItems([FromQuery, ModelBinder(typeof(CommaDelimitedCollectionModelBinder))] Guid[] ids)
     {
         var isApiKey = User.GetIsApiKey();
         var userId = User.GetUserId();
@@ -699,7 +701,18 @@ public class LibraryController : BaseJellyfinApiController
         // Quotes are valid in linux. They'll possibly cause issues here.
         var filename = Path.GetFileName(item.Path)?.Replace("\"", string.Empty, StringComparison.Ordinal);
 
-        return PhysicalFile(item.Path, MimeTypes.GetMimeType(item.Path), filename, true);
+        var filePath = item.Path;
+        if (item.IsFileProtocol)
+        {
+            // PhysicalFile does not work well with symlinks at the moment.
+            var resolved = FileSystemHelper.ResolveLinkTarget(filePath, returnFinalTarget: true);
+            if (resolved is not null && resolved.Exists)
+            {
+                filePath = resolved.FullName;
+            }
+        }
+
+        return PhysicalFile(filePath, MimeTypes.GetMimeType(filePath), filename, true);
     }
 
     /// <summary>
@@ -722,10 +735,10 @@ public class LibraryController : BaseJellyfinApiController
     [ProducesResponseType(StatusCodes.Status200OK)]
     public ActionResult<QueryResult<BaseItemDto>> GetSimilarItems(
         [FromRoute, Required] Guid itemId,
-        [FromQuery, ModelBinder(typeof(CommaDelimitedArrayModelBinder))] Guid[] excludeArtistIds,
+        [FromQuery, ModelBinder(typeof(CommaDelimitedCollectionModelBinder))] Guid[] excludeArtistIds,
         [FromQuery] Guid? userId,
         [FromQuery] int? limit,
-        [FromQuery, ModelBinder(typeof(CommaDelimitedArrayModelBinder))] ItemFields[] fields)
+        [FromQuery, ModelBinder(typeof(CommaDelimitedCollectionModelBinder))] ItemFields[] fields)
     {
         userId = RequestHelpers.GetUserId(User, userId);
         var user = userId.IsNullOrEmpty()
@@ -778,13 +791,14 @@ public class LibraryController : BaseJellyfinApiController
         var query = new InternalItemsQuery(user)
         {
             Genres = item.Genres,
+            Tags = item.Tags,
             Limit = limit,
             IncludeItemTypes = includeItemTypes.ToArray(),
-            SimilarTo = item,
             DtoOptions = dtoOptions,
             EnableTotalRecordCount = !isMovie ?? true,
             EnableGroupByMetadataKey = isMovie ?? false,
-            MinSimilarityScore = 2 // A remnant from album/artist scoring
+            ExcludeItemIds = [itemId],
+            OrderBy = [(ItemSortBy.Random, SortOrder.Ascending)]
         };
 
         // ExcludeArtistIds
@@ -793,7 +807,7 @@ public class LibraryController : BaseJellyfinApiController
             query.ExcludeArtistIds = excludeArtistIds;
         }
 
-        List<BaseItem> itemsResult = _libraryManager.GetItemList(query);
+        var itemsResult = _libraryManager.GetItemList(query);
 
         var returnList = _dtoService.GetBaseItemDtos(itemsResult, dtoOptions, user);
 
@@ -859,6 +873,16 @@ public class LibraryController : BaseJellyfinApiController
 
         result.LyricFetchers = plugins
             .SelectMany(i => i.Plugins.Where(p => p.Type == MetadataPluginType.LyricFetcher))
+            .Select(i => new LibraryOptionInfoDto
+            {
+                Name = i.Name,
+                DefaultEnabled = true
+            })
+            .DistinctBy(i => i.Name, StringComparer.OrdinalIgnoreCase)
+            .ToArray();
+
+        result.MediaSegmentProviders = plugins
+            .SelectMany(i => i.Plugins.Where(p => p.Type == MetadataPluginType.MediaSegmentProvider))
             .Select(i => new LibraryOptionInfoDto
             {
                 Name = i.Name,

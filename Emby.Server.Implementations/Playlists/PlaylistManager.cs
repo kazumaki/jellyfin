@@ -9,8 +9,8 @@ using System.IO;
 using System.Linq;
 using System.Threading;
 using System.Threading.Tasks;
-using Jellyfin.Data.Entities;
 using Jellyfin.Data.Enums;
+using Jellyfin.Database.Implementations.Entities;
 using Jellyfin.Extensions;
 using MediaBrowser.Controller.Dto;
 using MediaBrowser.Controller.Entities;
@@ -134,14 +134,16 @@ namespace Emby.Server.Implementations.Playlists
 
             try
             {
-                Directory.CreateDirectory(path);
+                var info = Directory.CreateDirectory(path);
                 var playlist = new Playlist
                 {
                     Name = name,
                     Path = path,
                     OwnerUserId = request.UserId,
                     Shares = request.Users ?? [],
-                    OpenAccess = request.Public ?? false
+                    OpenAccess = request.Public ?? false,
+                    DateCreated = info.CreationTimeUtc,
+                    DateModified = info.LastWriteTimeUtc
                 };
 
                 playlist.SetMediaType(request.MediaType);
@@ -242,6 +244,7 @@ namespace Emby.Server.Implementations.Playlists
 
             // Update the playlist in the repository
             playlist.LinkedChildren = [.. playlist.LinkedChildren, .. childrenToAdd];
+            playlist.DateLastMediaAdded = DateTime.UtcNow;
 
             await UpdatePlaylistInternal(playlist).ConfigureAwait(false);
 
@@ -283,6 +286,16 @@ namespace Emby.Server.Implementations.Playlists
                 RefreshPriority.High);
         }
 
+        internal static int DetermineAdjustedIndex(int newPriorIndexAllChildren, int newIndex)
+        {
+            if (newIndex == 0)
+            {
+                return newPriorIndexAllChildren > 0 ? newPriorIndexAllChildren - 1 : 0;
+            }
+
+            return newPriorIndexAllChildren + 1;
+        }
+
         public async Task MoveItemAsync(string playlistId, string entryId, int newIndex, Guid callingUserId)
         {
             if (_libraryManager.GetItemById(playlistId) is not Playlist playlist)
@@ -302,15 +315,15 @@ namespace Emby.Server.Implementations.Playlists
                 return;
             }
 
-            var newPriorItemIndex = newIndex > oldIndexAccessible ? newIndex : newIndex - 1 < 0 ? 0 : newIndex - 1;
+            var newPriorItemIndex = Math.Max(newIndex - 1, 0);
             var newPriorItemId = accessibleChildren[newPriorItemIndex].Item1.ItemId;
             var newPriorItemIndexOnAllChildren = children.FindIndex(c => c.Item1.ItemId.Equals(newPriorItemId));
-            var adjustedNewIndex = newPriorItemIndexOnAllChildren + 1;
+            var adjustedNewIndex = DetermineAdjustedIndex(newPriorItemIndexOnAllChildren, newIndex);
 
             var item = playlist.LinkedChildren.FirstOrDefault(i => string.Equals(entryId, i.ItemId?.ToString("N", CultureInfo.InvariantCulture), StringComparison.OrdinalIgnoreCase));
             if (item is null)
             {
-                _logger.LogWarning("Modified item not found in playlist. ItemId: {ItemId}, PlaylistId: {PlaylistId}", item.ItemId, playlistId);
+                _logger.LogWarning("Modified item not found in playlist. ItemId: {ItemId}, PlaylistId: {PlaylistId}", entryId, playlistId);
 
                 return;
             }

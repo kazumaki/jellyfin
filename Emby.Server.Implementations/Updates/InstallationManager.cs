@@ -48,7 +48,7 @@ namespace Emby.Server.Implementations.Updates
         /// </summary>
         /// <value>The application host.</value>
         private readonly IServerApplicationHost _applicationHost;
-        private readonly object _currentInstallationsLock = new object();
+        private readonly Lock _currentInstallationsLock = new();
 
         /// <summary>
         /// The current installations.
@@ -187,7 +187,7 @@ namespace Emby.Server.Implementations.Updates
                                 await _pluginManager.PopulateManifest(package, version.VersionNumber, plugin.Path, plugin.Manifest.Status).ConfigureAwait(false);
                             }
 
-                            // Remove versions with a target ABI greater then the current application version.
+                            // Remove versions with a target ABI greater than the current application version.
                             if (Version.TryParse(version.TargetAbi, out var targetAbi) && _applicationHost.ApplicationVersion < targetAbi)
                             {
                                 package.Versions.RemoveAt(i);
@@ -223,14 +223,13 @@ namespace Emby.Server.Implementations.Updates
             Guid id = default,
             Version? specificVersion = null)
         {
-            if (name is not null)
-            {
-                availablePackages = availablePackages.Where(x => x.Name.Equals(name, StringComparison.OrdinalIgnoreCase));
-            }
-
             if (!id.IsEmpty())
             {
                 availablePackages = availablePackages.Where(x => x.Id.Equals(id));
+            }
+            else if (name is not null)
+            {
+                availablePackages = availablePackages.Where(x => x.Name.Equals(name, StringComparison.OrdinalIgnoreCase));
             }
 
             if (specificVersion is not null)

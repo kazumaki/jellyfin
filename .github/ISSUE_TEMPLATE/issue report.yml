@@ -1,6 +1,7 @@
 name: Issue Report
 description: File an issue report
 labels: [bug, triage]
+type: Bug
 body:
   - type: markdown
     id: introduction
@@ -14,7 +15,7 @@ body:
       label: "This issue respects the following points:"
       description: All conditions are **required**. Failure to comply with any of these conditions may cause your issue to be closed without comment.
       options:
-        - label: This is a **bug**, not a question or a configuration issue; Please visit our forum or chat rooms first to troubleshoot with volunteers, before creating a report. The links can be found [here](https://jellyfin.org/contact/).
+        - label: This is a **bug**, not a question or a configuration issue; Please visit our [forum or chat rooms](https://jellyfin.org/contact/) first to troubleshoot with volunteers, before creating a report.
           required: true
         - label: This issue is **not** already reported on [GitHub](https://github.com/jellyfin/jellyfin/issues?q=is%3Aopen+is%3Aissue) _(I've searched it)_.
           required: true
@@ -86,7 +87,7 @@ body:
       label: Jellyfin Server version
       description: What version of Jellyfin are you using?
       options:
-        - 10.9.11+
+        - 10.10.0+
         - Master
         - Unstable
         - Older*
@@ -140,7 +141,9 @@ body:
         - **Reverse Proxy**: [e.g. none, nginx, apache, etc.]
         - **Base URL**: [e.g. none, yes: /example]
         - **Networking**: [e.g. Host, Bridge/NAT]
-        - **Storage**: [e.g. local, NFS, cloud]
+        - **Jellyfin Data Storage**: [e.g. local SATA SSD, local HDD]
+        - **Media Storage**: [e.g. Local HDD, SMB Share]
+        - **External Integrations**: [e.g. Jellystat, Jellyseerr]
       value: |
         - OS:
         - Linux Kernel:
@@ -155,7 +158,9 @@ body:
         - Reverse Proxy:
         - Base URL:
         - Networking:
-        - Storage:
+        - Jellyfin Data Storage:
+        - Media Storage:
+        - External Integrations:
       render: markdown
     validations:
       required: true
